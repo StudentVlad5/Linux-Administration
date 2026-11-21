@@ -1,0 +1,45 @@
+replicaCount: 1
+
+image:
+  repository: 851092642046.dkr.ecr.us-west-2.amazonaws.com/django-app
+  tag: "latest"
+  pullPolicy: Always
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "96Mi"
+  limits:
+    cpu: "200m"
+    memory: "192Mi"
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8000 # РџРѕСЂС‚, РЅР° СЏРєРѕРјСѓ РїСЂР°С†СЋС” Django/Gunicorn Сѓ РєРѕРЅС‚РµР№РЅРµСЂС–
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+# Р—РјС–РЅРЅС– СЃРµСЂРµРґРѕРІРёС‰Р° Р· РўРµРјРё 4
+config:
+  DEBUG: True
+  SECRET_KEY: your-secret-key-here
+  ALLOWED_HOSTS: localhost,127.0.0.1,django,web,*
+  POSTGRES_DB: django_db
+  POSTGRES_USER: django_user
+  POSTGRES_PASSWORD: your-db-password-here
+  DB_HOST: db
+  DB_PORT: 5432
+
+# Р”Р»СЏ Р±РѕРЅСѓСЃРЅРѕРіРѕ Р·Р°РІРґР°РЅРЅСЏ (Р·Р° Р·Р°РјРѕРІС‡СѓРІР°РЅРЅСЏРј РІРёРјРєРЅРµРЅРѕ)
+ingress:
+  enabled: false
+  className: nginx
+  host: yourdomain.com
+  path: /
+  pathType: Prefix
+  tls: true
