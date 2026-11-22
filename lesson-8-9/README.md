@@ -1,215 +1,305 @@
-# Домашнє завдання: Розгортання застосунку в AWS EKS за допомогою Terraform та Helm - Lesson 7
+# CI/CD та GitOps розгортання Django-застосунку в AWS EKS
+
+### Lesson 8–9 | Terraform · Jenkins · Kaniko · Amazon ECR · Helm · Argo CD
+
+---
 
 ## Опис проєкту
 
-Цей проєкт демонструє автоматизоване розгортання хмарної інфраструктури **Amazon Web Services (AWS)** за допомогою **Terraform** та подальше розгортання вебзастосунку в **Amazon Elastic Kubernetes Service (EKS)** за допомогою **Helm**.
+Цей проєкт демонструє реалізацію повного циклу **CI/CD та GitOps** для автоматизованого розгортання вебзастосунку на базі **Django** у керованому Kubernetes-кластері **Amazon EKS**.
 
-Інфраструктура створюється з використанням модульної архітектури Terraform із віддаленим збереженням стану в Amazon S3 та блокуванням паралельного доступу через DynamoDB.
+Основна мета - побудувати автоматизований процес доставки змін, який дозволяє розробнику оновити код у GitHub, після чого система самостійно збирає Docker-образ, завантажує його до Amazon ECR, оновлює конфігурацію Helm-чарта та синхронізує нову версію застосунку з Kubernetes-кластером.
 
-Проєкт передбачає розгортання вебзастосунку **Django** та бази даних **PostgreSQL** усередині Kubernetes-кластера, забезпечуючи зовнішній доступ через AWS Load Balancer та автоматичне горизонтальне масштабування за допомогою Kubernetes Horizontal Pod Autoscaler (HPA).
+Для реалізації використано:
 
-### Використані технології
+- **Terraform** - автоматизоване створення хмарної інфраструктури AWS.
+- **Helm** - встановлення та конфігурація Jenkins і Argo CD у Kubernetes.
+- **Jenkins** - автоматизація CI-процесів.
+- **Kaniko** - збирання Docker-образів без використання Docker daemon.
+- **Amazon ECR** - приватне сховище Docker-образів.
+- **Argo CD** - декларативне управління розгортанням за методологією GitOps.
+- **Kubernetes HPA** - автоматичне горизонтальне масштабування застосунку.
 
-| Технологія | Призначення                             |
-| ---------- | --------------------------------------- |
-| AWS        | Хмарна інфраструктура                   |
-| Terraform  | Інфраструктура як код (IaC)             |
-| Amazon VPC | Ізоляція та налаштування мережі         |
-| Amazon S3  | Віддалене збереження стану Terraform    |
-| DynamoDB   | Блокування стану Terraform              |
-| Amazon ECR | Реєстр Docker-образів                   |
-| Amazon EKS | Керований Kubernetes-кластер            |
-| Docker     | Контейнеризація застосунку              |
-| Kubernetes | Оркестрація контейнерів                 |
-| Helm       | Розгортання застосунку в Kubernetes     |
-| Django     | Фреймворк вебзастосунку                 |
-| PostgreSQL | Реляційна база даних                    |
-| HPA        | Горизонтальне автоматичне масштабування |
-| kubectl    | Керування Kubernetes-кластером          |
+У результаті створено конвеєр, у якому оновлення коду в GitHub автоматично запускає процес збирання та розгортання нової версії Django-застосунку.
+
+---
+
+## Архітектура та робочий процес (GitOps Flow)
+
+```text
+                  [ Developer ]
+                        |
+                        | Git Push
+                        v
+              [ GitHub Repository ]
+                 Branch: lesson-8-9
+                        |
+                        | 1. Trigger Build
+                        v
+                [ Jenkins on EKS ]
+                  Kubernetes Agent
+                   (Kaniko + Git)
+                        |
+              +---------+---------+
+              |                   |
+              | 2. Build Image    | 3. Update image.tag
+              |                   |
+              v                   v
+        [ Amazon ECR ]       [ GitHub Repository ]
+        django-app:TAG       charts/django-app/
+        django-app:latest    values.yaml
+                                  |
+                                  | 4. Git Change Detection
+                                  v
+                            [ Argo CD on EKS ]
+                                  |
+                                  | 5. Auto-Sync
+                                  v
+                          [ Kubernetes Cluster ]
+                                  |
+                  +---------------+---------------+
+                  |               |               |
+                  v               v               v
+             [ Django ]     [ PostgreSQL ]     [ HPA ]
+             Deployment     Deployment         1..6 Pods
+                  |
+                  v
+           [ AWS LoadBalancer ]
+                  |
+                  v
+             [ Web Browser ]
+```
+
+### Послідовність роботи CI/CD
+
+1. **Git Push:** розробник надсилає зміни до GitHub.
+2. **Trigger Build:** Jenkins запускає CI-пайплайн.
+3. **Build & Push:** Kaniko збирає Docker-образ та завантажує його до Amazon ECR.
+4. **Update Helm Chart:** Jenkins автоматично змінює тег Docker-образу у `values.yaml` та відправляє коміт до GitHub.
+5. **GitOps Synchronization:** Argo CD виявляє зміни в Git-репозиторії.
+6. **Deployment:** Argo CD автоматично синхронізує Helm-чарт із Kubernetes-кластером.
+7. **Rolling Update:** Kubernetes поступово замінює старі поди новою версією застосунку.
+
+---
+
+## Технологічний стек
+
+| Категорія                 | Технології та сервіси                  |
+| ------------------------- | -------------------------------------- |
+| Хмарна інфраструктура     | AWS, Amazon EKS, EC2, VPC, NAT Gateway |
+| Infrastructure as Code    | Terraform                              |
+| Віддалений стан Terraform | Amazon S3, DynamoDB                    |
+| Контейнерний реєстр       | Amazon ECR                             |
+| CI/CD                     | Jenkins                                |
+| Збирання Docker-образів   | Kaniko                                 |
+| Контейнеризація           | Docker                                 |
+| Оркестрація               | Kubernetes                             |
+| Керування пакетами        | Helm                                   |
+| GitOps                    | Argo CD                                |
+| Автомасштабування         | Kubernetes HPA                         |
+| Збір метрик               | Metrics Server                         |
+| Постійне сховище          | Amazon EBS, EBS CSI Driver             |
+| Застосунок                | Python, Django, Gunicorn               |
+| База даних                | PostgreSQL                             |
+| Контроль версій           | Git, GitHub                            |
 
 ---
 
 ## Структура проєкту
 
 ```text
-lesson-7/
-│
-├── main.tf
-├── backend.tf
-├── outputs.tf
-│
-├── modules/
-│   ├── s3-backend/
-│   │   ├── s3.tf
-│   │   ├── dynamodb.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   │
-│   ├── vpc/
-│   │   ├── vpc.tf
-│   │   ├── routes.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   │
-│   ├── ecr/
-│   │   ├── ecr.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   │
-│   └── eks/
-│       ├── eks.tf
-│       ├── variables.tf
-│       └── outputs.tf
-│
+lesson-8-9/
+├── app/
+│   ├── config/
+│   │   ├── __init__.py
+│   │   ├── asgi.py
+│   │   ├── settings.py                  # Конфігурація Django та підключення до PostgreSQL
+│   │   ├── urls.py
+│   │   └── wsgi.py
+│   ├── .dockerignore
+│   ├── .env.example
+│   ├── .gitignore
+│   ├── Dockerfile                       # Збірка Docker-образу Django-застосунку
+│   ├── Jenkinsfile                      # Декларативний CI-пайплайн (Kaniko build + Git tag update)
+│   ├── manage.py
+│   └── requirements.txt
 ├── charts/
 │   └── django-app/
-│       ├── Chart.yaml
-│       ├── values.yaml
-│       └── templates/
-│           ├── configmap.yaml
-│           ├── deployment.yaml
-│           ├── postgres.yaml
-│           ├── service.yaml
-│           └── hpa.yaml
-│
-└── README.md
+│       ├── templates/
+│       │   ├── configmap.yaml           # Змінні середовища застосунку
+│       │   ├── deployment.yaml          # Deployment для Django-контейнерів
+│       │   ├── hpa.yaml                 # HorizontalPodAutoscaler (1–6 подів за CPU)
+│       │   ├── postgres.yaml            # Deployment, Service та PVC для PostgreSQL
+│       │   └── service.yaml             # Service типу LoadBalancer (AWS ELB)
+│       ├── Chart.yaml                   # Метадані Helm-чарту застосунку
+│       └── values.yaml                  # Конфігурація релізу (image.tag оновлюється через Jenkins)
+├── modules/
+│   ├── argo_cd/
+│   │   ├── charts/
+│   │   │   ├── templates/
+│   │   │   │   └── application.yaml     # Argo CD Application маніфест для GitOps
+│   │   │   ├── Chart.yaml
+│   │   │   └── values.yaml
+│   │   ├── argocd.tf                    # Розгортання Argo CD через Helm
+│   │   ├── outputs.tf
+│   │   ├── providers.tf
+│   │   ├── values.yaml                  # Конфігурація Helm-релізу Argo CD
+│   │   └── variables.tf
+│   ├── ecr/
+│   │   ├── ecr.tf                       # Приватний реєстр Amazon ECR
+│   │   ├── outputs.tf
+│   │   └── variables.tf
+│   ├── eks/
+│   │   ├── aws_ebs_csi_driver.tf        # Драйвер EBS CSI для динамічного створення томів (PVC)
+│   │   ├── eks.tf                       # Кластер Amazon EKS та Node Group
+│   │   ├── jenkins_ecr_irsa.tf          # IAM Role for Service Account (IRSA) для доступу Jenkins до ECR
+│   │   ├── outputs.tf
+│   │   └── variables.tf
+│   ├── jenkins/
+│   │   ├── jenkins.tf                   # Розгортання Jenkins у Kubernetes через Helm
+│   │   ├── outputs.tf
+│   │   ├── providers.tf
+│   │   ├── values.yaml                  # Конфігурація Jenkins (JCasC, Kubernetes Pod Templates)
+│   │   └── variables.tf
+│   ├── s3-backend/
+│   │   ├── dynamodb.tf                  # Таблиця блокування стану Terraform
+│   │   ├── outputs.tf
+│   │   ├── s3.tf                        # S3-бакет для збереження Terraform state
+│   │   └── variables.tf
+│   └── vpc/
+│       ├── outputs.tf
+│       ├── routes.tf                    # Таблиці маршрутизації та NAT Gateway
+│       ├── variables.tf
+│       └── vpc.tf                       # VPC, публічні та приватні підмережі
+├── .terraform.lock.hcl
+├── backend.tf                           # Конфігурація віддаленого S3 backend
+├── main.tf                              # Головний файл оркестрації Terraform-модулів
+├── outputs.tf                           # Вихідні параметри інфраструктури
+└── README.md                            # Документація проєкту
 ```
-
----
-
-## Архітектура проєкту
-
-Інфраструктура складається з чотирьох основних модулів Terraform та одного Helm-чарта.
-
-### 1. Інфраструктура Terraform
-
-#### S3 Backend (`modules/s3-backend/`)
-
-Створює ресурси для віддаленого збереження стану Terraform:
-
-- Приватний S3-бакет для збереження `terraform.tfstate`.
-- Увімкнене версіювання об'єктів S3.
-- Шифрування даних.
-- Таблиця DynamoDB для блокування стану за допомогою `LockID`.
-
-#### VPC (`modules/vpc/`)
-
-Створює ізольовану віртуальну мережу в AWS:
-
-- VPC із CIDR-блоком `10.0.0.0/16`.
-- Публічні та приватні підмережі в декількох Availability Zones.
-- Internet Gateway (IGW).
-- NAT Gateway.
-- Таблиці маршрутизації та мережеві маршрути.
-- Теги підмереж для інтеграції з Kubernetes.
-
-Регіон AWS: `us-west-2`.
-
-#### ECR (`modules/ecr/`)
-
-Створює приватний репозиторій Amazon Elastic Container Registry:
-
-- Назва репозиторію: `django-app`.
-- Автоматичне сканування Docker-образів на вразливості під час завантаження.
-- Збереження та розповсюдження Docker-образів.
-
-#### EKS (`modules/eks/`)
-
-Створює керований Kubernetes-кластер:
-
-- Amazon EKS Control Plane.
-- IAM-ролі та необхідні дозволи.
-- Managed Node Group.
-- Робочі вузли на базі інстансів `t3.micro`.
-- Розміщення робочих вузлів у приватних підмережах.
-
-### 2. Kubernetes-застосунок (Helm)
-
-Helm-чарт розташований у директорії `charts/django-app/`.
-
-| Файл              | Призначення                                                     |
-| ----------------- | --------------------------------------------------------------- |
-| `configmap.yaml`  | Централізоване зберігання конфігурації застосунку та бази даних |
-| `deployment.yaml` | Deployment вебзастосунку Django                                 |
-| `postgres.yaml`   | Deployment PostgreSQL та внутрішній сервіс ClusterIP            |
-| `service.yaml`    | Зовнішній сервіс типу LoadBalancer                              |
-| `hpa.yaml`        | Horizontal Pod Autoscaler для автоматичного масштабування       |
-
-**Основні параметри застосунку:**
-
-- Django працює на порту `8000`.
-- Версія PostgreSQL: `15-alpine`.
-- Внутрішній сервіс бази даних: `db`.
-- Зовнішній HTTP-доступ через AWS Load Balancer на порту `80`.
-- Цільовий рівень використання CPU для HPA: `70%`.
 
 ---
 
 ## Попередні вимоги
 
-Перед розгортанням інфраструктури необхідно встановити та налаштувати такі інструменти:
+Перед початком роботи необхідно встановити та налаштувати:
 
-| Інструмент     | Вимоги                             |
-| -------------- | ---------------------------------- |
-| AWS CLI        | Налаштований через `aws configure` |
-| Terraform      | Версія >= 1.5                      |
-| Docker Desktop | Запущений Docker daemon            |
-| kubectl        | Встановлений                       |
-| Helm           | Версія >= 3.12                     |
+| Інструмент | Вимоги                                            |
+| ---------- | ------------------------------------------------- |
+| AWS CLI    | Налаштований AWS-профіль                          |
+| Terraform  | Версія >= 1.5                                     |
+| kubectl    | Для керування Kubernetes                          |
+| Helm       | Версія >= 3.12                                    |
+| Git        | Для роботи з GitHub                               |
+| Docker     | Для локальної роботи з Docker-образами за потреби |
 
-### Необхідні дозволи AWS
+### AWS Permissions
 
-Користувач або IAM-роль AWS повинні мати дозволи на керування такими сервісами:
+AWS IAM User або IAM Role повинні мати необхідні дозволи для роботи з:
 
 - VPC та EC2.
-- IAM.
-- S3.
-- DynamoDB.
+- IAM та EKS.
 - ECR.
-- EKS.
+- S3 та DynamoDB.
+- EBS.
+- Elastic Load Balancing.
+
+### GitHub Credentials
+
+Для автоматичного оновлення Helm-чарта Jenkins використовує GitHub Personal Access Token.
+
+У Jenkins Credentials необхідно створити облікові дані:
+
+| Параметр | Значення                     |
+| -------- | ---------------------------- |
+| ID       | `github-creds`               |
+| Type     | Username with password       |
+| Username | GitHub username              |
+| Password | GitHub Personal Access Token |
+
+Для Classic Personal Access Token необхідний дозвіл `repo`, який дозволяє виконувати запис у відповідний репозиторій.
+
+**Важливо:** токен не повинен зберігатися безпосередньо у `Jenkinsfile`, Terraform-файлах або відкритому GitHub-репозиторії.
 
 ---
 
-## Інструкція з розгортання
+# Етапи розгортання
 
-### Етап 1. Ініціалізація Terraform
+## 1. Розгортання AWS Infrastructure через Terraform
 
-Ініціалізуємо робочу директорію Terraform:
+Усі основні ресурси AWS створюються за допомогою Terraform.
+
+### 1.1. Ініціалізація Terraform
+
+Перейдіть у директорію Terraform:
+
+```bash
+cd terraform
+```
+
+Ініціалізуйте робочу директорію:
 
 ```bash
 terraform init
 ```
 
-Команда завантажує необхідні провайдери, ініціалізує модулі та налаштовує Terraform Backend.
+Команда завантажує необхідні провайдери та модулі й ініціалізує Terraform Backend.
 
-> **Примітка:** Якщо S3-бакет і таблиця DynamoDB створюються цим проєктом, їх необхідно попередньо створити до виконання `terraform init`, якщо вони вже вказані в `backend.tf`. Terraform Backend ініціалізується до того, як Terraform зможе створити ресурси через модулі.
+> Якщо S3-бакет і DynamoDB використовуються як Remote Backend, вони мають бути створені до виконання `terraform init`. Якщо ці ресурси також керуються Terraform, їх потрібно попередньо розгорнути окремим bootstrap-процесом.
 
-### Етап 2. Перевірка плану розгортання
+### 1.2. Перевірка конфігурації
+
+```bash
+terraform validate
+```
+
+Перевіряємо план створення інфраструктури:
 
 ```bash
 terraform plan
 ```
 
-Команда формує план змін і показує, які ресурси AWS будуть створені, оновлені або видалені.
-
-### Етап 3. Розгортання інфраструктури AWS
+### 1.3. Розгортання інфраструктури
 
 ```bash
 terraform apply
 ```
 
-Перевіряємо план виконання та підтверджуємо розгортання.
+Підтвердіть виконання змін після перевірки плану.
 
 Terraform створює:
 
-- VPC та мережеву інфраструктуру.
-- Репозиторій Amazon ECR.
-- Кластер Amazon EKS.
-- Керовану групу робочих вузлів Kubernetes.
+- VPC та підмережі.
+- Internet Gateway та NAT Gateway.
+- Amazon ECR Repository.
+- Amazon EKS Cluster.
+- Managed Node Group.
+- IAM Roles та IRSA.
+- EBS CSI Driver.
+- Jenkins через Helm.
+- Argo CD через Helm.
 
-Після завершення Terraform виводить URL репозиторію ECR та назву кластера EKS.
+### 1.4. Перевірка створених ресурсів
 
-### Етап 4. Підключення до Kubernetes-кластера
+```bash
+terraform output
+```
+
+Перевіряємо ресурси AWS:
+
+```bash
+aws eks list-clusters --region us-west-2
+```
+
+Перевіряємо репозиторії ECR:
+
+```bash
+aws ecr describe-repositories --region us-west-2
+```
+
+---
+
+## 2. Підключення до Kubernetes-кластера
 
 Оновлюємо локальну конфігурацію `kubectl`:
 
@@ -219,150 +309,284 @@ aws eks update-kubeconfig \
   --name <EKS_CLUSTER_NAME>
 ```
 
-Перевіряємо стан робочих вузлів:
+Перевіряємо робочі вузли:
 
 ```bash
 kubectl get nodes
 ```
 
-Очікуваний результат: робочі вузли повинні перейти в стан `Ready`.
+Очікуваний результат - робочі вузли перебувають у статусі `Ready`.
 
-### Етап 5. Встановлення Metrics Server
-
-Metrics Server необхідний для роботи HPA, оскільки забезпечує збір метрик використання CPU та пам'яті.
+Перевіряємо Kubernetes Namespaces:
 
 ```bash
-kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl get namespaces
 ```
 
-Перевіряємо стан розгортання:
+Перевіряємо системні компоненти:
 
 ```bash
-kubectl get deployment metrics-server -n kube-system
+kubectl get pods -n kube-system
 ```
-
-### Етап 6. Оптимізація CoreDNS
-
-Зменшуємо кількість реплік CoreDNS до однієї, щоб зменшити споживання ресурсів кластера:
-
-```bash
-kubectl scale deployment coredns \
-  -n kube-system \
-  --replicas=1
-```
-
-Це налаштування призначене для економії ресурсів обмежених за потужністю робочих вузлів `t3.micro`.
 
 ---
 
-## Збірка Docker-образу та завантаження в ECR
+## 3. Налаштування Jenkins CI Pipeline
 
-### Етап 1. Авторизація Docker у Amazon ECR
+Jenkins автоматично встановлюється в Kubernetes за допомогою Terraform та Helm.
 
-Замість `<ACCOUNT_ID>` вкажіть ідентифікатор свого AWS-акаунта.
+Для виконання CI-процесів використовується Kubernetes Agent із двома контейнерами:
 
-```bash
-aws ecr get-login-password --region us-west-2 | \
-docker login \
-  --username AWS \
-  --password-stdin <ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com
+- `kaniko` - збирання та публікація Docker-образу.
+- `git` - отримання вихідного коду та оновлення GitHub-репозиторію.
+
+### 3.1. Архітектура Jenkins Agent
+
+```text
+          [ Jenkins Controller ]
+                    |
+                    | Create Agent Pod
+                    v
+             [ Kubernetes Pod ]
+                    |
+             +------+------+
+             |             |
+             v             v
+          [Kaniko]       [Git]
+             |             |
+             v             v
+        [Build Image]  [Update values.yaml]
+             |             |
+             v             v
+         [Amazon ECR]   [GitHub Push]
 ```
 
-### Етап 2. Збірка Docker-образу
+### 3.2. Перевірка Jenkins
 
-Виконуємо команду в директорії, де розташований `Dockerfile`:
-
-```bash
-docker build -t django-app .
-```
-
-### Етап 3. Присвоєння тегу Docker-образу
+Отримуємо список подів Jenkins:
 
 ```bash
-docker tag django-app:latest \
-  <ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/django-app:latest
+kubectl get pods -n jenkins
 ```
 
-### Етап 4. Завантаження образу в ECR
+Перевіряємо сервіси:
 
 ```bash
-docker push \
-  <ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/django-app:latest
+kubectl get svc -n jenkins
 ```
 
-Після виконання команди Docker-образ буде доступний у приватному репозиторії Amazon ECR, звідки його зможуть отримувати робочі вузли EKS.
+Переглядаємо логи Jenkins:
+
+```bash
+kubectl logs -n jenkins deployment/jenkins
+```
+
+Для отримання доступу до вебінтерфейсу Jenkins можна використати port-forward, якщо сервіс налаштований як ClusterIP:
+
+```bash
+kubectl port-forward svc/jenkins 8080:8080 -n jenkins
+```
+
+Після цього відкрийте у браузері:
+
+```text
+http://localhost:8080
+```
+
+### 3.3. Налаштування Jenkins Pipeline
+
+У Jenkins створюється Pipeline Job, який використовує `Jenkinsfile`, розташований у директорії `app/`.
+
+Pipeline складається з двох основних стадій.
+
+**Stage 1 - Build and Push Docker Image**
+
+Kaniko виконує:
+
+1. Отримання Dockerfile та вихідного коду Django.
+2. Збирання Docker-образу.
+3. Присвоєння тегів `${BUILD_NUMBER}` та `latest`.
+4. Завантаження образу до Amazon ECR.
+
+Приклад тегування:
+
+```text
+django-app:8
+django-app:latest
+```
+
+**Stage 2 - Update Helm Chart Tag**
+
+Git-контейнер виконує:
+
+1. Отримання актуального стану GitHub-репозиторію.
+2. Перемикання на гілку `lesson-8-9`.
+3. Оновлення параметра `image.tag` у `charts/django-app/values.yaml`.
+4. Створення автоматичного коміту.
+5. Відправлення змін до GitHub.
+
+Приклад коміту:
+
+```text
+chore(ci): update image tag to 8
+```
+
+Після цього GitHub містить актуальний тег Docker-образу, який повинен використовувати Argo CD.
+
+### 3.4. Перевірка результату Jenkins
+
+У Jenkins відкрийте відповідний Pipeline Job.
+
+Перевірте:
+
+- Наявність успішного Build.
+- Успішне виконання `Build and Push Docker Image`.
+- Успішне виконання `Update Helm Chart Tag`.
+- Відсутність помилок під час Git Push.
+
+Перевірити завантажені Docker-образи можна через AWS CLI:
+
+```bash
+aws ecr describe-images \
+  --repository-name django-app \
+  --region us-west-2
+```
 
 ---
 
-## Розгортання застосунку за допомогою Helm
+## 4. Налаштування GitOps через Argo CD
 
-### Етап 1. Перевірка Helm-шаблонів
+Argo CD автоматично встановлюється в Kubernetes за допомогою Terraform та Helm.
 
-Перед встановленням застосунку виконуємо локальну перевірку Helm-шаблонів:
+Його основне завдання - постійно порівнювати конфігурацію в GitHub із фактичним станом Kubernetes-кластера.
 
-```bash
-helm template django-release ./charts/django-app
-```
+### 4.1. Перевірка Argo CD
 
-Команда генерує Kubernetes-маніфести з використанням параметрів, визначених у `values.yaml`.
-
-### Етап 2. Встановлення Helm-релізу
+Перевіряємо поди:
 
 ```bash
-helm install django-release ./charts/django-app
+kubectl get pods -n argocd
 ```
 
-Команда створює такі ресурси Kubernetes:
-
-- ConfigMap.
-- Django Deployment.
-- PostgreSQL Deployment.
-- PostgreSQL ClusterIP Service.
-- Зовнішній LoadBalancer Service.
-- Horizontal Pod Autoscaler.
-
-### Етап 3. Оновлення Helm-релізу
-
-Якщо конфігурація Helm-чарта змінилася, застосовуємо оновлення:
+Перевіряємо сервіси:
 
 ```bash
-helm upgrade django-release ./charts/django-app
+kubectl get svc -n argocd
 ```
 
-### Етап 4. Виконання міграцій Django
+### 4.2. Доступ до вебінтерфейсу Argo CD
 
-Міграції бази даних необхідно виконати всередині запущеного контейнера Django.
-
-**Linux / macOS / Git Bash:**
+Для локального доступу можна використати port-forward:
 
 ```bash
-POD=$(kubectl get pods -l app=django-app \
-  -o jsonpath="{.items[0].metadata.name}")
-
-kubectl exec -it $POD -- python manage.py migrate
+kubectl port-forward svc/argocd-server 8081:443 -n argocd
 ```
 
-**Windows PowerShell:**
+Відкриваємо у браузері:
 
-```powershell
-$POD = kubectl get pods -l app=django-app -o jsonpath="{.items[0].metadata.name}"
-
-kubectl exec -it $POD -- python manage.py migrate
+```text
+https://localhost:8081
 ```
 
-Команда створює необхідні таблиці бази даних та застосовує всі очікувані міграції Django.
+Для початкового отримання адміністративного пароля:
+
+```bash
+kubectl get secret argocd-initial-admin-secret \
+  -n argocd \
+  -o jsonpath="{.data.password}" | base64 -d
+```
+
+> Після першого входу рекомендується змінити початковий пароль адміністратора.
+
+### 4.3. Налаштування Argo CD Application
+
+Для GitOps створюється об'єкт `Application`, який відстежує Helm-чарт Django-застосунку в GitHub.
+
+Основні параметри:
+
+| Параметр          | Значення            |
+| ----------------- | ------------------- |
+| Application       | `django-app`        |
+| Source Repository | GitHub Repository   |
+| Target Revision   | `lesson-8-9`        |
+| Path              | `charts/django-app` |
+| Destination       | Kubernetes Cluster  |
+| Namespace         | `default`           |
+| Sync Policy       | Automated           |
+
+Автоматична синхронізація дозволяє Argo CD самостійно застосовувати зміни після оновлення Git-репозиторію.
+
+### 4.4. Принцип роботи автоматичної синхронізації
+
+```text
+[Jenkins]
+    |
+    | Update image.tag
+    v
+[GitHub: values.yaml]
+    |
+    | Detect Git Changes
+    v
+[Argo CD]
+    |
+    | Compare Desired State
+    v
+[Kubernetes]
+    |
+    | Apply Helm Changes
+    v
+[Django Deployment]
+    |
+    | Rolling Update
+    v
+[New Application Version]
+```
+
+Argo CD використовує Git як єдине джерело бажаного стану інфраструктури та застосунку.
+
+Таким чином, Jenkins відповідає за CI та оновлення конфігурації, а Argo CD - за CD та синхронізацію Kubernetes.
+
+### 4.5. Перевірка Argo CD
+
+Перевіряємо створені Application:
+
+```bash
+kubectl get applications -n argocd
+```
+
+Або за допомогою Argo CD CLI:
+
+```bash
+argocd app list
+```
+
+Перевіряємо стан конкретного застосунку:
+
+```bash
+argocd app get django-app
+```
+
+Очікувані статуси:
+
+- `Synced` - конфігурація Kubernetes відповідає конфігурації Git.
+- `Healthy` - ресурси застосунку перебувають у справному стані.
 
 ---
 
-## Перевірка працездатності
+## 5. Автоматичне масштабування Django за допомогою HPA
 
-### 1. Перевірка ресурсів Kubernetes
+Для автоматичного горизонтального масштабування застосунку використовується Kubernetes Horizontal Pod Autoscaler.
 
-Отримуємо список усіх основних ресурсів:
+Параметри HPA:
 
-```bash
-kubectl get all
-```
+| Параметр                     | Значення |
+| ---------------------------- | -------- |
+| Мінімальна кількість реплік  | 1        |
+| Максимальна кількість реплік | 6        |
+| Метрика                      | CPU      |
+| Цільове завантаження CPU     | 70%      |
+
+Metrics Server забезпечує отримання метрик, необхідних для роботи HPA.
 
 Перевіряємо HPA:
 
@@ -370,34 +594,66 @@ kubectl get all
 kubectl get hpa
 ```
 
-Перевіряємо Helm-релізи:
+Переглядаємо детальну інформацію:
 
 ```bash
-helm list
+kubectl describe hpa django-app-hpa
 ```
 
-**Очікуваний результат:**
-
-- Поди Django перебувають у статусі `Running`.
-- Под PostgreSQL перебуває у статусі `Running`.
-- Сервіс LoadBalancer отримав зовнішню DNS-адресу.
-- HPA відображає поточний рівень використання CPU.
-- Helm-реліз має статус `deployed`.
-
-### 2. Перевірка мережевих Endpoints
+Перевіряємо метрики:
 
 ```bash
-kubectl get endpoints django-release-service
+kubectl top pods
 ```
 
-Очікуваний результат: у списку Endpoints відображається внутрішня IP-адреса пода Django та порт `8000`.
+HPA автоматично збільшує або зменшує кількість реплік Django відповідно до поточного навантаження.
 
-### 3. Перевірка зовнішнього доступу до застосунку
+---
+
+## 6. Перевірка працездатності застосунку
+
+### 6.1. Перевірка Kubernetes-ресурсів
+
+```bash
+kubectl get all
+```
+
+Перевірка Deployment:
+
+```bash
+kubectl get deployments
+```
+
+Перевірка Pod:
+
+```bash
+kubectl get pods
+```
+
+Перевірка Service:
+
+```bash
+kubectl get services
+```
+
+### 6.2. Перевірка PostgreSQL
+
+```bash
+kubectl get pods -l app=postgres
+```
+
+Перевірка сервісу бази даних:
+
+```bash
+kubectl get svc db
+```
+
+### 6.3. Перевірка зовнішнього доступу
 
 Отримуємо зовнішню адресу LoadBalancer:
 
 ```bash
-kubectl get services
+kubectl get svc django-app
 ```
 
 Виконуємо HTTP-запит:
@@ -406,70 +662,224 @@ kubectl get services
 curl -I http://<LOAD_BALANCER_ADDRESS>
 ```
 
-**Очікувана відповідь:**
+Очікувана відповідь залежить від конфігурації Django:
 
 ```text
 HTTP/1.1 200 OK
 ```
 
-Також можуть бути коректними відповіді перенаправлення `301` або `302`, залежно від конфігурації Django.
+Також можливі коректні відповіді перенаправлення `301` або `302`.
 
-Після успішного виконання всіх етапів вебзастосунок повинен бути доступний через зовнішню адресу LoadBalancer.
-
----
-
-## Підсумкова конфігурація
-
-| Компонент                 | Конфігурація     |
-| ------------------------- | ---------------- |
-| Регіон AWS                | `us-west-2`      |
-| CIDR VPC                  | `10.0.0.0/16`    |
-| Реєстр контейнерів        | Amazon ECR       |
-| Kubernetes-кластер        | Amazon EKS       |
-| Тип інстансів             | `t3.micro`       |
-| Вебзастосунок             | Django           |
-| Порт застосунку           | `8000`           |
-| База даних                | PostgreSQL 15    |
-| Сервіс бази даних         | ClusterIP (`db`) |
-| Зовнішній сервіс          | LoadBalancer     |
-| Автомасштабування         | Kubernetes HPA   |
-| Цільове використання CPU  | `70%`            |
-| Керування інфраструктурою | Terraform        |
-| Розгортання застосунку    | Helm             |
+Після успішного розгортання застосунок доступний через зовнішню адресу AWS LoadBalancer.
 
 ---
 
-## Видалення інфраструктури
+## Результат автоматизованого CI/CD
 
-Щоб уникнути зайвих витрат AWS, після завершення роботи необхідно видалити створені ресурси.
+Після завершення налаштування весь процес оновлення застосунку відбувається автоматично:
 
-Видаляємо Helm-реліз:
+| Етап | Компонент     | Результат                           |
+| ---- | ------------- | ----------------------------------- |
+| 1    | GitHub        | Отримання змін вихідного коду       |
+| 2    | Jenkins       | Запуск CI Pipeline                  |
+| 3    | Kaniko        | Збирання Docker-образу              |
+| 4    | Amazon ECR    | Збереження нового образу            |
+| 5    | Jenkins + Git | Оновлення `image.tag` у Helm values |
+| 6    | GitHub        | Збереження нового коміту            |
+| 7    | Argo CD       | Виявлення змін у Git                |
+| 8    | Helm          | Оновлення Kubernetes-ресурсів       |
+| 9    | Kubernetes    | Rolling Update Django Deployment    |
+| 10   | HPA           | Автоматичне масштабування подів     |
+
+**Результат:** реалізовано автоматизований процес доставки нових версій Django-застосунку до Amazon EKS із використанням GitOps.
+
+---
+
+## Вирішені технічні проблеми
+
+Під час налаштування інфраструктури та CI/CD були виявлені й усунені такі проблеми.
+
+### 1. Конфлікт імен гілки та директорії Git
+
+**Проблема:**
+
+Команда:
 
 ```bash
-helm uninstall django-release
+git checkout lesson-8-9
 ```
 
-Видаляємо інфраструктуру, керовану Terraform:
+завершувалася помилкою `exit code 128`, оскільки в корені репозиторію існувала директорія з такою самою назвою, як і Git-гілка.
+
+**Рішення:**
+
+Використано явне перемикання на віддалену гілку:
+
+```bash
+git checkout -B ${GIT_BRANCH} origin/${GIT_BRANCH}
+```
+
+Також налаштовано безпечну робочу директорію Git та збережено `Jenkinsfile` у кодуванні UTF-8 без BOM.
+
+### 2. Помилка GitHub Push (HTTP 403)
+
+**Проблема:**
+
+Jenkins не мав достатніх дозволів для запису змін у GitHub-репозиторій.
+
+**Рішення:**
+
+- Створено GitHub Personal Access Token із дозволом `repo`.
+- Оновлено облікові дані `github-creds` у Jenkins Credentials Store.
+- Перевірено можливість виконання Git Push із Jenkins.
+
+### 3. Статус Degraded у Argo CD для HPA
+
+**Проблема:**
+
+HorizontalPodAutoscaler не міг отримати метрики CPU:
+
+```text
+unable to get metrics for resource cpu
+```
+
+Через відсутність метрик Argo CD відображав некоректний стан HPA.
+
+**Рішення:**
+
+Розгорнуто Kubernetes Metrics Server:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+```
+
+Після встановлення Metrics Server HPA отримав доступ до необхідних метрик, а стан застосунку в Argo CD змінився на:
+
+```text
+Healthy / Synced
+```
+
+---
+
+## Очищення ресурсів AWS (Cleanup)
+
+Після завершення тестування та фіксації результатів інфраструктуру було видалено для уникнення подальших витрат AWS.
+
+### 1. Видалення Kubernetes-застосунків
+
+Перед видаленням інфраструктури необхідно видалити GitOps-застосунок та ресурси, створені ним:
+
+```bash
+argocd app delete django-app
+```
+
+Перевіряємо сервіси Kubernetes:
+
+```bash
+kubectl get services --all-namespaces
+```
+
+Це дозволяє переконатися, що сервіси типу LoadBalancer видалені та AWS Load Balancer звільнений.
+
+### 2. Видалення Terraform-інфраструктури
+
+Перейдіть у директорію Terraform:
+
+```bash
+cd terraform
+```
+
+Перевірте план видалення:
+
+```bash
+terraform plan -destroy
+```
+
+Видаліть ресурси:
 
 ```bash
 terraform destroy
 ```
 
-> **Увага!** Перед видаленням перевірте залежності ресурсів Terraform. S3-бакет із файлом стану та таблиця DynamoDB можуть потребувати окремого керування. Не видаляйте S3-бакет із Terraform State до створення резервної копії стану.
+Ця операція видаляє ресурси, якими керує Terraform, зокрема:
+
+- Amazon EKS Cluster.
+- EC2 Worker Nodes.
+- VPC та підмережі.
+- NAT Gateway.
+- Internet Gateway.
+- Amazon ECR Repository.
+- Jenkins.
+- Argo CD.
+- Інші ресурси, визначені конфігурацією Terraform.
+
+### 3. Перевірка видалення ресурсів
+
+Перевіряємо активні EC2-інстанси:
+
+```bash
+aws ec2 describe-instances \
+  --region us-west-2 \
+  --filters Name=instance-state-name,Values=running
+```
+
+Перевіряємо EKS-кластери:
+
+```bash
+aws eks list-clusters --region us-west-2
+```
+
+Перевіряємо ECR-репозиторії:
+
+```bash
+aws ecr describe-repositories --region us-west-2
+```
+
+Перевіряємо балансувальники:
+
+```bash
+aws elb describe-load-balancers --region us-west-2
+```
+
+Перевіряємо Elastic IP:
+
+```bash
+aws ec2 describe-addresses --region us-west-2
+```
+
+Окремо перевіряємо залишкові EBS-томи та інші ресурси, які можуть продовжувати генерувати витрати.
+
+**Результат:** після завершення очищення активні ресурси проєкту в регіоні `us-west-2` відсутні.
+
+> Примітка: Remote State S3 та DynamoDB можуть залишатися окремими ресурсами. Їх потрібно видаляти лише після резервного копіювання та завершення роботи з Terraform State.
 
 ---
 
-## Додаткові примітки
+## Висновки
 
-- Замініть усі шаблонні значення, наприклад `<ACCOUNT_ID>` та `<EKS_CLUSTER_NAME>`, на відповідні значення вашого AWS-акаунта.
-- Переконайтеся, що тег Docker-образу в `values.yaml` відповідає образу, завантаженому в ECR.
-- Перед розгортанням налаштуйте змінні середовища Django та облікові дані для підключення до PostgreSQL.
-- Не зберігайте конфіденційні дані, паролі та production `SECRET_KEY` у відкритих GitHub-репозиторіях.
-- Переконайтеся, що мережеві налаштування AWS та IAM-дозволи налаштовані правильно.
-- Для production-середовищ рекомендується використовувати постійне сховище даних PostgreSQL та окремий сервіс керування секретами.
+У межах цього проєкту реалізовано повний автоматизований CI/CD та GitOps-процес розгортання Django-застосунку в Amazon EKS.
+
+Під час виконання завдання було опрацьовано такі практичні аспекти:
+
+- Автоматизація створення AWS-інфраструктури за допомогою Terraform.
+- Модульна організація Infrastructure as Code.
+- Розгортання Jenkins та Argo CD через Helm.
+- Використання Kubernetes Agents для виконання CI-процесів.
+- Бездемонне збирання Docker-образів за допомогою Kaniko.
+- Автоматична публікація Docker-образів в Amazon ECR.
+- Інтеграція Jenkins із GitHub через Personal Access Token.
+- Автоматичне оновлення Helm-конфігурації.
+- Реалізація GitOps за допомогою Argo CD.
+- Автоматична синхронізація Kubernetes із GitHub.
+- Горизонтальне масштабування застосунку через HPA.
+- Діагностика та усунення проблем інтеграції CI/CD-компонентів.
+
+**Підсумок:** створено автоматизований конвеєр доставки програмного забезпечення, у якому Jenkins відповідає за збирання та публікацію Docker-образів, а Argo CD забезпечує декларативне розгортання та синхронізацію застосунку в Kubernetes.
 
 ---
 
-**Проєкт:** Lesson 7 — Розгортання AWS EKS за допомогою Terraform та Helm.
+**Навчальний проєкт:** Lesson 8–9 - Jenkins, Terraform, Helm та Argo CD.
 
-**Мета:** Автоматизація хмарної інфраструктури та розгортання контейнеризованого застосунку в Kubernetes.
+**Хмарна платформа:** Amazon Web Services (`us-west-2`).
+
+**Методологія:** Infrastructure as Code (IaC), Continuous Integration (CI), Continuous Delivery (CD), GitOps.
