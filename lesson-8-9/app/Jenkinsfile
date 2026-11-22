@@ -1,4 +1,4 @@
-pipeline {
+﻿pipeline {
   agent {
     kubernetes {
       inheritFrom 'kaniko-git'
@@ -33,7 +33,8 @@ pipeline {
         container('git') {
           withCredentials([usernamePassword(credentialsId: 'github-creds', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
             sh """
-              git config --global user.email "jenkins@ci.local"
+              git config --global --add safe.directory '*' 
+                            git config --global user.email "jenkins@ci.local"
               git config --global user.name "Jenkins CI"
               git checkout ${GIT_BRANCH}
               git pull https://${GIT_USER}:${GIT_PASS}@${GIT_REPO} ${GIT_BRANCH}
