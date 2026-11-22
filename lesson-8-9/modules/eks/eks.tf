@@ -57,8 +57,8 @@ resource "aws_iam_role_policy_attachment" "nodes_AmazonEKS_CNI_Policy" {
   role       = aws_iam_role.eks_nodes.name
 }
 
-resource "aws_iam_role_policy_attachment" "nodes_AmazonEC2ContainerRegistryReadOnly" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly" # Дозволяє нодам завантажувати образи з ECR
+resource "aws_iam_role_policy_attachment" "nodes_AmazonEC2ContainerRegistryPowerUser" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser" # Дозволяє нодам і Kaniko завантажувати та пушити образи в ECR
   role       = aws_iam_role.eks_nodes.name
 }
 
@@ -71,7 +71,7 @@ resource "aws_eks_node_group" "main" {
   instance_types  = var.instance_types
 
   scaling_config {
-    desired_size = 2
+    desired_size = 3
     max_size     = 4
     min_size     = 1
   }
@@ -79,6 +79,6 @@ resource "aws_eks_node_group" "main" {
   depends_on = [
     aws_iam_role_policy_attachment.nodes_AmazonEKSWorkerNodePolicy,
     aws_iam_role_policy_attachment.nodes_AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.nodes_AmazonEC2ContainerRegistryReadOnly,
+    aws_iam_role_policy_attachment.nodes_AmazonEC2ContainerRegistryPowerUser,
   ]
 }

@@ -12,5 +12,5 @@ variable "subnet_ids" {
 variable "instance_types" {
   description = "Тип інстансів для Worker Nodes"
   type        = list(string)
-  default     = ["t3.micro", "t2.micro"]
+  default     = ["t3.small"]
 }

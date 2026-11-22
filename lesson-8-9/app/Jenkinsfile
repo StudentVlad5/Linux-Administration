@@ -1,0 +1,50 @@
+pipeline {
+  agent {
+    kubernetes {
+      inheritFrom 'kaniko-git'
+    }
+  }
+
+  environment {
+    AWS_REGION = 'us-west-2'
+    ECR_REGISTRY = '851092642046.dkr.ecr.us-west-2.amazonaws.com'
+    IMAGE_NAME = 'django-app'
+    GIT_REPO = 'github.com/StudentVlad5/Linux-Administration.git'
+    GIT_BRANCH = 'lesson-8-9'
+  }
+
+  stages {
+    stage('Build and Push Docker Image') {
+      steps {
+        container('kaniko') {
+          sh """
+            /kaniko/executor \
+              --context=dir://lesson-8-9/app \
+              --dockerfile=lesson-8-9/app/Dockerfile \
+              --destination=${ECR_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} \
+              --destination=${ECR_REGISTRY}/${IMAGE_NAME}:latest
+          """
+        }
+      }
+    }
+
+    stage('Update Helm Chart Tag') {
+      steps {
+        container('git') {
+          withCredentials([usernamePassword(credentialsId: 'github-creds', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
+            sh """
+              git config --global user.email "jenkins@ci.local"
+              git config --global user.name "Jenkins CI"
+              git checkout ${GIT_BRANCH}
+              git pull https://${GIT_USER}:${GIT_PASS}@${GIT_REPO} ${GIT_BRANCH}
+              sed -i 's/tag:.*/tag: "${BUILD_NUMBER}"/' lesson-8-9/charts/django-app/values.yaml
+              git add lesson-8-9/charts/django-app/values.yaml
+              git commit -m "chore(ci): update image tag to ${BUILD_NUMBER}" || echo "No changes to commit"
+              git push https://${GIT_USER}:${GIT_PASS}@${GIT_REPO} ${GIT_BRANCH}
+            """
+          }
+        }
+      }
+    }
+  }
+}

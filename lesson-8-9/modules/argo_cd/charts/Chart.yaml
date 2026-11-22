@@ -1,0 +1,4 @@
+apiVersion: v2
+name: argocd-apps
+description: Argo CD Application definition for Django App
+version: 0.1.0
