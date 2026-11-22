@@ -36,7 +36,7 @@ pipeline {
               git config --global --add safe.directory '*' 
                             git config --global user.email "jenkins@ci.local"
               git config --global user.name "Jenkins CI"
-              git checkout ${GIT_BRANCH}
+              git checkout -B ${GIT_BRANCH} origin/${GIT_BRANCH}
               git pull https://${GIT_USER}:${GIT_PASS}@${GIT_REPO} ${GIT_BRANCH}
               sed -i 's/tag:.*/tag: "${BUILD_NUMBER}"/' lesson-8-9/charts/django-app/values.yaml
               git add lesson-8-9/charts/django-app/values.yaml
