@@ -24,3 +24,7 @@ variable "chart_path" {
   type    = string
   default = "lesson-8-9/charts/django-app"
 }
+
+variable "cluster_ca_certificate" {
+  type = string
+}

@@ -21,11 +21,7 @@ provider "aws" {
   region = "us-west-2"
 }
 
-module "s3_backend" {
-  source      = "./modules/s3-backend"
-  bucket_name = "vladyslav-popov-tf-state-lesson8"
-  table_name  = "terraform-locks"
-}
+
 
 module "vpc" {
   source             = "./modules/vpc"
@@ -51,16 +47,18 @@ module "eks" {
 }
 
 module "jenkins" {
-  source           = "./modules/jenkins"
-  cluster_name     = module.eks.cluster_name
-  cluster_endpoint = module.eks.cluster_endpoint
+  source                 = "./modules/jenkins"
+  cluster_name           = module.eks.cluster_name
+  cluster_endpoint       = module.eks.cluster_endpoint
+  cluster_ca_certificate = module.eks.cluster_ca_certificate
 }
 
 module "argo_cd" {
-  source           = "./modules/argo_cd"
-  cluster_name     = module.eks.cluster_name
-  cluster_endpoint = module.eks.cluster_endpoint
-  repo_url         = "https://github.com/StudentVlad5/Linux-Administration.git"
-  target_revision  = "lesson-8-9"
-  chart_path       = "lesson-8-9/charts/django-app"
+  source                 = "./modules/argo_cd"
+  cluster_name           = module.eks.cluster_name
+  cluster_endpoint       = module.eks.cluster_endpoint
+  cluster_ca_certificate = module.eks.cluster_ca_certificate
+  repo_url               = "https://github.com/StudentVlad5/Linux-Administration.git"
+  target_revision        = "lesson-8-9"
+  chart_path             = "lesson-8-9/charts/django-app"
 }

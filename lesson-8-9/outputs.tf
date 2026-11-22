@@ -1,14 +1,4 @@
-output "s3_bucket_url" {
-  description = "URL S3-бакета для Terraform state"
-  value       = module.s3_backend.s3_bucket_domain_name
-}
-
-output "dynamodb_table_name" {
-  description = "Ім'я таблиці DynamoDB для блокування стейтів"
-  value       = module.s3_backend.dynamodb_table_name
-}
-
-output "vpc_id" {
+﻿output "vpc_id" {
   description = "ID створеної VPC"
   value       = module.vpc.vpc_id
 }
@@ -36,4 +26,12 @@ output "eks_cluster_name" {
 output "eks_cluster_endpoint" {
   description = "Endpoint для підключення до EKS кластера"
   value       = module.eks.cluster_endpoint
+}
+
+output "ebs_csi_driver_role_arn" {
+  value = module.eks.ebs_csi_driver_role_arn
+}
+
+output "jenkins_ecr_role_arn" {
+  value = module.eks.jenkins_ecr_role_arn
 }

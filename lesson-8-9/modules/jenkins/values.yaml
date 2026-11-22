@@ -1,4 +1,4 @@
-controller:
+﻿controller:
   serviceType: LoadBalancer
   servicePort: 8080
   resources:
@@ -18,7 +18,7 @@ controller:
 persistence:
   enabled: true
   size: "8Gi"
-  storageClass: "gp2"
+  storageClass: "gp3"
 
 agent:
   enabled: true
@@ -30,13 +30,15 @@ agent:
         containers:
           - name: kaniko
             image: gcr.io/kaniko-project/executor:debug
-            command:
-              - sleep
-            args:
-              - 99d
+            command: "sleep"
+            args: "99d"
           - name: git
             image: alpine/git:latest
-            command:
-              - sleep
-            args:
-              - 99d
+            command: "sleep"
+            args: "99d"
+
+serviceAccount:
+  create: true
+  name: jenkins
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::851092642046:role/lesson-8-eks-jenkins-ecr-role"

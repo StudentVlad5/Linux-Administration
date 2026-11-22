@@ -10,3 +10,7 @@ variable "namespace" {
   type    = string
   default = "jenkins"
 }
+
+variable "cluster_ca_certificate" {
+  type = string
+}
