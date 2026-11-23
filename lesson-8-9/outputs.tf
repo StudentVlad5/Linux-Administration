@@ -1,4 +1,4 @@
-﻿output "vpc_id" {
+output "vpc_id" {
   description = "ID створеної VPC"
   value       = module.vpc.vpc_id
 }
@@ -34,4 +34,9 @@ output "ebs_csi_driver_role_arn" {
 
 output "jenkins_ecr_role_arn" {
   value = module.eks.jenkins_ecr_role_arn
+}
+
+output "argocd_password_cmd" {
+  description = "Команда для отримання декодованого початкового пароля Argo CD"
+  value       = "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
 }

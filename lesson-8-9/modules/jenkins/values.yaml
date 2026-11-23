@@ -1,4 +1,4 @@
-﻿controller:
+controller:
   serviceType: LoadBalancer
   servicePort: 8080
   resources:
@@ -14,6 +14,44 @@
     - git:latest
     - configuration-as-code:latest
     - credentials-binding:latest
+    - job-dsl:latest
+  additionalExistingSecrets:
+    - name: jenkins-github-secret
+      keyName: username
+    - name: jenkins-github-secret
+      keyName: token
+  JCasC:
+    configScripts:
+      github-credentials: |
+        credentials:
+          system:
+            domainCredentials:
+              - credentials:
+                  - usernamePassword:
+                      scope: GLOBAL
+                      id: "github-creds"
+                      username: "$${jenkins-github-secret-username}"
+                      password: "$${jenkins-github-secret-token}"
+                      description: "GitHub PAT for CI/CD"
+      seed-job: |
+        jobs:
+          - script: >
+              pipelineJob('django-app-ci') {
+                definition {
+                  cpsScm {
+                    scm {
+                      git {
+                        remote {
+                          url('${gitops_repo_url}')
+                          credentials('github-creds')
+                        }
+                        branch('*/lesson-8-9')
+                      }
+                    }
+                    scriptPath('app/Jenkinsfile')
+                  }
+                }
+              }
 
 persistence:
   enabled: true
@@ -41,4 +79,4 @@ serviceAccount:
   create: true
   name: jenkins
   annotations:
-    eks.amazonaws.com/role-arn: "arn:aws:iam::851092642046:role/lesson-8-eks-jenkins-ecr-role"
+    eks.amazonaws.com/role-arn: "${jenkins_ecr_role_arn}"

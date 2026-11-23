@@ -1,4 +1,4 @@
-﻿data "aws_iam_policy_document" "jenkins_ecr_assume_role" {
+data "aws_iam_policy_document" "jenkins_ecr_assume_role" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     effect  = "Allow"

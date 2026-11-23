@@ -21,8 +21,6 @@ provider "aws" {
   region = "us-west-2"
 }
 
-
-
 module "vpc" {
   source             = "./modules/vpc"
   vpc_cidr_block     = "10.0.0.0/16"
@@ -51,6 +49,8 @@ module "jenkins" {
   cluster_name           = module.eks.cluster_name
   cluster_endpoint       = module.eks.cluster_endpoint
   cluster_ca_certificate = module.eks.cluster_ca_certificate
+  jenkins_ecr_role_arn   = module.eks.jenkins_ecr_role_arn
+  github_token           = var.github_token
 }
 
 module "argo_cd" {

@@ -14,7 +14,7 @@
 
 - **Terraform** - автоматизоване створення хмарної інфраструктури AWS.
 - **Helm** - встановлення та конфігурація Jenkins і Argo CD у Kubernetes.
-- **Jenkins** - автоматизація CI-процесів.
+- **Jenkins (JCasC + Job DSL)** - декларативне налаштування CI-сервера та автоматизація збірок.
 - **Kaniko** - збирання Docker-образів без використання Docker daemon.
 - **Amazon ECR** - приватне сховище Docker-образів.
 - **Argo CD** - декларативне управління розгортанням за методологією GitOps.
@@ -37,7 +37,7 @@
                         | 1. Trigger Build
                         v
                 [ Jenkins on EKS ]
-                  Kubernetes Agent
+               JCasC + Kubernetes Agent
                    (Kaniko + Git)
                         |
               +---------+---------+
@@ -47,7 +47,7 @@
               v                   v
         [ Amazon ECR ]       [ GitHub Repository ]
         django-app:TAG       charts/django-app/
-        django-app:latest    values.yaml
+                             values.yaml
                                   |
                                   | 4. Git Change Detection
                                   v
@@ -74,7 +74,7 @@
 
 1. **Git Push:** розробник надсилає зміни до GitHub.
 2. **Trigger Build:** Jenkins запускає CI-пайплайн.
-3. **Build & Push:** Kaniko збирає Docker-образ та завантажує його до Amazon ECR.
+3. **Build & Push:** Kaniko збирає Docker-образ та завантажує його до Amazon ECR з унікальним тегом `${BUILD_NUMBER}`.
 4. **Update Helm Chart:** Jenkins автоматично змінює тег Docker-образу у `values.yaml` та відправляє коміт до GitHub.
 5. **GitOps Synchronization:** Argo CD виявляє зміни в Git-репозиторії.
 6. **Deployment:** Argo CD автоматично синхронізує Helm-чарт із Kubernetes-кластером.
@@ -126,10 +126,11 @@ lesson-8-9/
 ├── charts/
 │   └── django-app/
 │       ├── templates/
-│       │   ├── configmap.yaml           # Змінні середовища застосунку
+│       │   ├── configmap.yaml           # Відкриті змінні середовища застосунку (ConfigMap)
 │       │   ├── deployment.yaml          # Deployment для Django-контейнерів
 │       │   ├── hpa.yaml                 # HorizontalPodAutoscaler (1–6 подів за CPU)
-│       │   ├── postgres.yaml            # Deployment, Service та PVC для PostgreSQL
+│       │   ├── postgres.yaml            # Deployment та Service для PostgreSQL
+│       │   ├── secret.yaml              # Чутливі змінні середовища (SECRET_KEY, POSTGRES_PASSWORD)
 │       │   └── service.yaml             # Service типу LoadBalancer (AWS ELB)
 │       ├── Chart.yaml                   # Метадані Helm-чарту застосунку
 │       └── values.yaml                  # Конфігурація релізу (image.tag оновлюється через Jenkins)
@@ -137,10 +138,11 @@ lesson-8-9/
 │   ├── argo_cd/
 │   │   ├── charts/
 │   │   │   ├── templates/
-│   │   │   │   └── application.yaml     # Argo CD Application маніфест для GitOps
+│   │   │   │   ├── application.yaml     # Argo CD Application маніфест для GitOps
+│   │   │   │   └── repository.yaml      # Декларативна реєстрація Git-репозиторію в Argo CD
 │   │   │   ├── Chart.yaml
 │   │   │   └── values.yaml
-│   │   ├── argocd.tf                    # Розгортання Argo CD через Helm
+│   │   ├── argocd.tf                    # Розгортання Argo CD та чарту застосунків через Helm
 │   │   ├── outputs.tf
 │   │   ├── providers.tf
 │   │   ├── values.yaml                  # Конфігурація Helm-релізу Argo CD
@@ -150,16 +152,16 @@ lesson-8-9/
 │   │   ├── outputs.tf
 │   │   └── variables.tf
 │   ├── eks/
-│   │   ├── aws_ebs_csi_driver.tf        # Драйвер EBS CSI для динамічного створення томів (PVC)
+│   │   ├── aws_ebs_csi_driver.tf        # Драйвер EBS CSI для динамічного створення томів (StorageClass gp3)
 │   │   ├── eks.tf                       # Кластер Amazon EKS та Node Group
 │   │   ├── jenkins_ecr_irsa.tf          # IAM Role for Service Account (IRSA) для доступу Jenkins до ECR
 │   │   ├── outputs.tf
 │   │   └── variables.tf
 │   ├── jenkins/
-│   │   ├── jenkins.tf                   # Розгортання Jenkins у Kubernetes через Helm
+│   │   ├── jenkins.tf                   # Розгортання Jenkins через Helm та Kubernetes Secret для GitHub
 │   │   ├── outputs.tf
 │   │   ├── providers.tf
-│   │   ├── values.yaml                  # Конфігурація Jenkins (JCasC, Kubernetes Pod Templates)
+│   │   ├── values.yaml                  # Конфігурація Jenkins (JCasC, Job DSL, Pod Templates)
 │   │   └── variables.tf
 │   ├── s3-backend/
 │   │   ├── dynamodb.tf                  # Таблиця блокування стану Terraform
@@ -175,6 +177,7 @@ lesson-8-9/
 ├── backend.tf                           # Конфігурація віддаленого S3 backend
 ├── main.tf                              # Головний файл оркестрації Terraform-модулів
 ├── outputs.tf                           # Вихідні параметри інфраструктури
+├── variables.tf                         # Вхідні змінні кореневого модуля (включно з чутливим токеном)
 └── README.md                            # Документація проєкту
 ```
 
@@ -204,11 +207,17 @@ AWS IAM User або IAM Role повинні мати необхідні дозв
 - EBS.
 - Elastic Load Balancing.
 
-### GitHub Credentials
+### GitHub Credentials (JCasC)
 
-Для автоматичного оновлення Helm-чарта Jenkins використовує GitHub Personal Access Token.
+Для автоматичного оновлення Helm-чарта Jenkins використовує GitHub Personal Access Token (Classic PAT із правом `repo`).
 
-У Jenkins Credentials необхідно створити облікові дані:
+Токен передається під час розгортання через змінну середовища Terraform без збереження у відкритому коді:
+
+```bash
+export TF_VAR_github_token="<YOUR_GITHUB_PAT>"
+```
+
+Terraform створює Kubernetes Secret jenkins-github-secret, а плагін JCasC автоматично реєструє облікові дані github-creds та CI-пайплайн django-app-ci:
 
 | Параметр | Значення                     |
 | -------- | ---------------------------- |
@@ -230,12 +239,6 @@ AWS IAM User або IAM Role повинні мати необхідні дозв
 Усі основні ресурси AWS створюються за допомогою Terraform.
 
 ### 1.1. Ініціалізація Terraform
-
-Перейдіть у директорію Terraform:
-
-```bash
-cd terraform
-```
 
 Ініціалізуйте робочу директорію:
 
@@ -274,10 +277,10 @@ Terraform створює:
 - Amazon ECR Repository.
 - Amazon EKS Cluster.
 - Managed Node Group.
-- IAM Roles та IRSA.
-- EBS CSI Driver.
-- Jenkins через Helm.
-- Argo CD через Helm.
+- IAM Roles та IRSA (`jenkins_ecr_role_arn` передається динамічно в Helm values Jenkins).
+- EBS CSI Driver (`gp3`).
+- Jenkins через Helm (із JCasC та Job DSL).
+- Argo CD та декларативні ресурси `Repository` і `Application` через Helm.
 
 ### 1.4. Перевірка створених ресурсів
 
@@ -334,6 +337,7 @@ kubectl get pods -n kube-system
 ## 3. Налаштування Jenkins CI Pipeline
 
 Jenkins автоматично встановлюється в Kubernetes за допомогою Terraform та Helm.
+github-creds і django-app-ci створюються декларативно через JCasC + Job DSL без ручних кроків у UI.
 
 Для виконання CI-процесів використовується Kubernetes Agent із двома контейнерами:
 
@@ -395,7 +399,7 @@ http://localhost:8080
 
 ### 3.3. Налаштування Jenkins Pipeline
 
-У Jenkins створюється Pipeline Job, який використовує `Jenkinsfile`, розташований у директорії `app/`.
+Pipeline job django-app-ci створюється автоматично через Job DSL.
 
 Pipeline складається з двох основних стадій.
 
@@ -405,14 +409,13 @@ Kaniko виконує:
 
 1. Отримання Dockerfile та вихідного коду Django.
 2. Збирання Docker-образу.
-3. Присвоєння тегів `${BUILD_NUMBER}` та `latest`.
+3. Присвоєння тегів `${BUILD_NUMBER}`.
 4. Завантаження образу до Amazon ECR.
 
 Приклад тегування:
 
 ```text
 django-app:8
-django-app:latest
 ```
 
 **Stage 2 - Update Helm Chart Tag**
@@ -431,6 +434,7 @@ Git-контейнер виконує:
 chore(ci): update image tag to 8
 ```
 
+Передача облікових даних у sh виконується через одинарні лапки (sh '''...''').
 Після цього GitHub містить актуальний тег Docker-образу, який повинен використовувати Argo CD.
 
 ### 3.4. Перевірка результату Jenkins
@@ -497,6 +501,7 @@ kubectl get secret argocd-initial-admin-secret \
 ```
 
 > Після першого входу рекомендується змінити початковий пароль адміністратора.
+> Доступ іде по HTTPS (без прапорця --insecure), а команду отримання пароля можна взяти з terraform output argocd_password_cmd
 
 ### 4.3. Налаштування Argo CD Application
 
@@ -504,17 +509,19 @@ kubectl get secret argocd-initial-admin-secret \
 
 Основні параметри:
 
-| Параметр          | Значення            |
-| ----------------- | ------------------- |
-| Application       | `django-app`        |
-| Source Repository | GitHub Repository   |
-| Target Revision   | `lesson-8-9`        |
-| Path              | `charts/django-app` |
-| Destination       | Kubernetes Cluster  |
-| Namespace         | `default`           |
-| Sync Policy       | Automated           |
+| Параметр          | Значення                                |
+| ----------------- | --------------------------------------- |
+| Application       | `django-app`                            |
+| Source Repository | GitHub Repository                       |
+| Target Revision   | `lesson-8-9`                            |
+| Path              | `lesson-8-9/charts/django-app`          |
+| Destination       | Kubernetes Cluster                      |
+| Namespace         | `default`                               |
+| Sync Policy       | Automated (prune: true, selfHeal: true) |
 
 Автоматична синхронізація дозволяє Argo CD самостійно застосовувати зміни після оновлення Git-репозиторію.
+
+> Чарт modules/argo_cd/charts декларативно створює два ресурси: Repository (templates/repository.yaml) та Application (templates/application.yaml).
 
 ### 4.4. Принцип роботи автоматичної синхронізації
 
@@ -639,13 +646,19 @@ kubectl get services
 ### 6.2. Перевірка PostgreSQL
 
 ```bash
-kubectl get pods -l app=postgres
+kubectl get pods -l app=db
 ```
 
 Перевірка сервісу бази даних:
 
 ```bash
 kubectl get svc db
+```
+
+Перевірка секрету:
+
+```bash
+kubectl get secret django-app-secret
 ```
 
 ### 6.3. Перевірка зовнішнього доступу
@@ -730,7 +743,7 @@ Jenkins не мав достатніх дозволів для запису зм
 **Рішення:**
 
 - Створено GitHub Personal Access Token із дозволом `repo`.
-- Оновлено облікові дані `github-creds` у Jenkins Credentials Store.
+- Передано облікові дані у Jenkins декларативно через Kubernetes Secret (`jenkins-github-secret`) та JCasC (`github-creds`).
 - Перевірено можливість виконання Git Push із Jenkins.
 
 ### 3. Статус Degraded у Argo CD для HPA
@@ -782,12 +795,6 @@ kubectl get services --all-namespaces
 Це дозволяє переконатися, що сервіси типу LoadBalancer видалені та AWS Load Balancer звільнений.
 
 ### 2. Видалення Terraform-інфраструктури
-
-Перейдіть у директорію Terraform:
-
-```bash
-cd terraform
-```
 
 Перевірте план видалення:
 
@@ -845,6 +852,12 @@ aws elb describe-load-balancers --region us-west-2
 
 ```bash
 aws ec2 describe-addresses --region us-west-2
+```
+
+Перевіряємо томи EBS:
+
+```bash
+aws ec2 describe-volumes --region us-west-2
 ```
 
 Окремо перевіряємо залишкові EBS-томи та інші ресурси, які можуть продовжувати генерувати витрати.
