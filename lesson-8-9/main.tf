@@ -59,7 +59,7 @@ module "argo_cd" {
   cluster_endpoint       = module.eks.cluster_endpoint
   cluster_ca_certificate = module.eks.cluster_ca_certificate
   repo_url               = "https://github.com/StudentVlad5/Linux-Administration.git"
-  target_revision        = "lesson-8-9"
+  target_revision        = "lesson-db-module"
   chart_path             = "lesson-8-9/charts/django-app"
 }
 module "rds" {
@@ -90,4 +90,10 @@ module "rds" {
   }
 
   depends_on = [module.vpc]
+}
+
+module "s3_backend" {
+  source      = "./modules/s3-backend"
+  bucket_name = "vlad-popov-terraform-state-us-west-2"
+  table_name  = "terraform-locks"
 }

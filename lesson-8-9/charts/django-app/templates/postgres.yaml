@@ -1,3 +1,4 @@
+{{- if not .Values.externalDatabase.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,3 +42,4 @@ spec:
     - protocol: TCP
       port: 5432
       targetPort: 5432
+{{- end }}

@@ -48,7 +48,7 @@ controller:
                         branch('*/lesson-8-9')
                       }
                     }
-                    scriptPath('app/Jenkinsfile')
+                    scriptPath('lesson-8-9/app/Jenkinsfile')
                   }
                 }
               }

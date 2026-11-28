@@ -3,6 +3,16 @@ kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-config
 data:
-  {{- range $key, $val := .Values.config }}
-  {{ $key }}: {{ $val | quote }}
+  DEBUG: {{ .Values.config.DEBUG | quote }}
+  ALLOWED_HOSTS: {{ .Values.config.ALLOWED_HOSTS | quote }}
+  {{- if .Values.externalDatabase.enabled }}
+  POSTGRES_DB: {{ .Values.externalDatabase.name | quote }}
+  POSTGRES_USER: {{ .Values.externalDatabase.user | quote }}
+  DB_HOST: {{ .Values.externalDatabase.host | quote }}
+  DB_PORT: {{ .Values.externalDatabase.port | quote }}
+  {{- else }}
+  POSTGRES_DB: {{ .Values.config.POSTGRES_DB | quote }}
+  POSTGRES_USER: {{ .Values.config.POSTGRES_USER | quote }}
+  DB_HOST: {{ .Values.config.DB_HOST | quote }}
+  DB_PORT: {{ .Values.config.DB_PORT | quote }}
   {{- end }}

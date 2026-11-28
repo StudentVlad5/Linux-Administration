@@ -16,7 +16,7 @@ resources:
 service:
   type: LoadBalancer
   port: 80
-  targetPort: 8000 # Порт, на якому працює Django/Gunicorn у контейнері
+  targetPort: 8000
 
 autoscaling:
   enabled: true
@@ -24,7 +24,7 @@ autoscaling:
   maxReplicas: 6
   targetCPUUtilizationPercentage: 70
 
-# Відкриті змінні середовища (ConfigMap)
+# Open environment variables (used when externalDatabase.enabled is false)
 config:
   DEBUG: True
   ALLOWED_HOSTS: localhost,127.0.0.1,django,web,*
@@ -33,7 +33,7 @@ config:
   DB_HOST: db
   DB_PORT: 5432
 
-# Чутливі змінні середовища (Kubernetes Secret)
+# Sensitive environment variables (Kubernetes Secret)
 secrets:
   SECRET_KEY: your-secret-key-here
   POSTGRES_PASSWORD: your-db-password-here
@@ -45,3 +45,12 @@ ingress:
   path: /
   pathType: Prefix
   tls: true
+
+# Managed AWS RDS / Aurora integration
+externalDatabase:
+  enabled: true
+  host: "django-app-dev-rds.c14ayakww674.us-west-2.rds.amazonaws.com"
+  port: 5432
+  name: "djangodb"
+  user: "dbadmin"
+  password: "" # Pass via Helm --set externalDatabase.password=... or K8s Secret
