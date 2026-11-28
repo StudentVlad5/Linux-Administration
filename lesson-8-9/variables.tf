@@ -4,3 +4,8 @@ variable "github_token" {
   sensitive   = true
   default     = ""
 }
+variable "db_password" {
+  description = "Master password for the RDS/Aurora database"
+  type        = string
+  sensitive   = true
+}

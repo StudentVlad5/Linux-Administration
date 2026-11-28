@@ -62,3 +62,32 @@ module "argo_cd" {
   target_revision        = "lesson-8-9"
   chart_path             = "lesson-8-9/charts/django-app"
 }
+module "rds" {
+  source = "./modules/rds"
+
+  project_name = "django-app"
+  environment  = "dev"
+  use_aurora   = false
+
+  vpc_id              = module.vpc.vpc_id
+  subnet_ids          = module.vpc.private_subnet_ids
+  allowed_cidr_blocks = ["10.0.0.0/16"]
+
+  engine           = "postgres"
+  engine_version   = "15"
+  parameter_family = "postgres15"
+  instance_class   = "db.t3.micro"
+  multi_az         = false
+
+  db_name         = "djangodb"
+  master_username = "dbadmin"
+  master_password = var.db_password
+
+  db_parameters = {
+    max_connections = "100"
+    log_statement   = "all"
+    work_mem        = "4096"
+  }
+
+  depends_on = [module.vpc]
+}

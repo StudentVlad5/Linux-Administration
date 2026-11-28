@@ -40,3 +40,17 @@ output "argocd_password_cmd" {
   description = "Команда для отримання декодованого початкового пароля Argo CD"
   value       = "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
 }
+output "database_type" {
+  description = "Deployed database type"
+  value       = module.rds.db_type
+}
+
+output "database_endpoint" {
+  description = "Database connection endpoint"
+  value       = module.rds.db_endpoint
+}
+
+output "database_port" {
+  description = "Database port"
+  value       = module.rds.db_port
+}
